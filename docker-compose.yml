@@ -1,0 +1,24 @@
+services:
+  whisper:
+    build: .
+    image: whisper-local:latest
+    network_mode: "none"
+    environment:
+      INPUT_DIR: /data/input
+      OUTPUT_DIR: /data/output
+      OUTPUT_FORMAT: txt
+      WHISPER_MODEL: turbo
+      WHISPER_LANGUAGE: auto
+      WHISPER_DEVICE: cpu
+      WHISPER_TASK: transcribe
+      MODEL_DIR: /models
+      REQUIRE_MODELS_PRESENT: "1"
+      DIARIZATION: "0"
+      VERBOSE: "0"
+      OVERWRITE: "0"
+      KEEP_INTERMEDIATE: "0"
+    volumes:
+      - ./media:/data/input:ro
+      - ./out:/data/output
+      - ./models:/models:ro
+
