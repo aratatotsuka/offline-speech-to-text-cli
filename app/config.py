@@ -23,6 +23,19 @@ def _getenv_bool(env: Mapping[str, str], key: str, default: bool) -> bool:
     raise ConfigError(f"invalid {key}={raw!r} (expected 0/1 or true/false)")
 
 
+def _getenv_bool_optional(env: Mapping[str, str], key: str, default: bool | None) -> bool | None:
+    raw = env.get(key, "").strip()
+    if raw == "":
+        return default
+    if raw.lower() in {"auto", "default", "none"}:
+        return default
+    if raw.lower() in {"1", "true", "yes", "y", "on"}:
+        return True
+    if raw.lower() in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ConfigError(f"invalid {key}={raw!r} (expected 0/1, true/false, or auto)")
+
+
 def _getenv_int(env: Mapping[str, str], key: str, default: int | None) -> int | None:
     raw = env.get(key, "").strip()
     if raw == "":
@@ -42,6 +55,7 @@ class Settings:
     whisper_model: str
     whisper_language: str | None
     whisper_device: str
+    whisper_fp16: bool | None
     whisper_task: str
     model_dir: Path
     require_models_present: bool
@@ -72,6 +86,8 @@ class Settings:
         if whisper_device not in {"cpu", "cuda"}:
             raise ConfigError("WHISPER_DEVICE must be cpu or cuda")
 
+        whisper_fp16 = _getenv_bool_optional(env, "WHISPER_FP16", None)
+
         whisper_task = _getenv(env, "WHISPER_TASK", "transcribe").lower()
         if whisper_task not in {"transcribe", "translate"}:
             raise ConfigError("WHISPER_TASK must be transcribe or translate")
@@ -94,6 +110,7 @@ class Settings:
             whisper_model=whisper_model,
             whisper_language=whisper_language,
             whisper_device=whisper_device,
+            whisper_fp16=whisper_fp16,
             whisper_task=whisper_task,
             model_dir=model_dir,
             require_models_present=require_models_present,
