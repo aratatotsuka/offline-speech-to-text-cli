@@ -65,6 +65,35 @@ docker run --rm --network none \
   whisper-local:latest
 ```
 
+#### CPUで明示的に実行（`--device cpu`）
+
+```bash
+docker run --rm --network none \
+  -v /host/media:/data/input:ro \
+  -v /host/out:/data/output \
+  -v /host/models:/models:ro \
+  whisper-local:latest --device cpu
+```
+
+#### GPUで実行（`--device cuda` + `--gpus all`）
+
+```bash
+docker run --rm --network none --gpus all \
+  -v /host/media:/data/input:ro \
+  -v /host/out:/data/output \
+  -v /host/models:/models:ro \
+  whisper-local:latest --device cuda
+```
+
+`--device` の優先順位:
+
+1. 起動引数 `--device`
+2. 環境変数 `WHISPER_DEVICE`
+3. デフォルト `cpu`
+
+※ `--device cuda`（または `WHISPER_DEVICE=cuda`）を指定したのにGPUが見えない場合、**CPUへ黙ってフォールバックせずエラーで終了**します。  
+GPU実行には `--gpus all` の指定と、ホスト側の NVIDIA driver / NVIDIA Container Toolkit が必要です。
+
 ## docker-compose example (offline)
 
 `docker-compose.yml` は `network_mode: "none"` を指定しています。
@@ -73,6 +102,18 @@ docker run --rm --network none \
 docker compose build
 docker compose run --rm whisper
 ```
+
+## docker-compose example (GPU, offline)
+
+`docker-compose.gpu.yml` はGPU予約（`deploy.resources.reservations.devices`）と `--device cuda` を指定しています。
+
+```bash
+docker compose -f docker-compose.gpu.yml build
+docker compose -f docker-compose.gpu.yml run --rm whisper
+```
+
+※ `deploy` セクションは Compose の実装/バージョン差で無視される場合があります（特に非Swarm運用）。  
+GPUが認識されない場合は `docker run --gpus all ...` の例で実行してください。
 
 ## Configuration (Environment Variables)
 
@@ -84,6 +125,7 @@ docker compose run --rm whisper
 | `WHISPER_MODEL` | `turbo` | 例: `turbo`, `large-v3-turbo`, `small`, `base`, ... |
 | `WHISPER_LANGUAGE` | `auto` | `auto` の場合は `--language` を指定しない（自動判定） |
 | `WHISPER_DEVICE` | `cpu` | `cpu` or `cuda` |
+| `WHISPER_FP16` | `auto` | `auto`（デフォルト）/ `0`でfp16無効（GPUのNaN回避） |
 | `WHISPER_TASK` | `transcribe` | `transcribe` or `translate` |
 | `MODEL_DIR` | `/models` | Whisperモデル格納先（常に `whisper --model_dir` に指定） |
 | `REQUIRE_MODELS_PRESENT` | `1` | `1` の場合、モデル未配置ならダウンロードせず即エラー |
@@ -120,12 +162,14 @@ docker compose run --rm whisper
 ## Troubleshooting
 
 - `MODEL_DIR` にモデルが無い: `REQUIRE_MODELS_PRESENT=1`（デフォルト）では即エラーになります。モデルを配置してから再実行してください。
+- `--device cuda` / `WHISPER_DEVICE=cuda` なのにGPUが使えない: `docker run --gpus all ...` を指定し、ホスト側の NVIDIA driver / NVIDIA Container Toolkit を確認してください（CPUで良ければ `--device cpu` / `WHISPER_DEVICE=cpu`）。
+- GPUで `tensor([[nan, ...` / `Expected parameter logits ...` などが出て出力されない: `WHISPER_FP16=0` を指定してfp16を無効化してください
 - `Permission denied` で `OUTPUT_DIR` に書けない: ホスト側のディレクトリ権限を確認し、必要なら `docker run --user` を指定してください。
 
 ## Exit codes
 
 - `0`: success
-- `2`: invalid configuration (`INPUT_DIR` など)
+- `2`: invalid configuration (`INPUT_DIR` など, `--device cuda` なのにGPUが使えない等)
 - `3`: no input files found
 - `4`: model not found in `MODEL_DIR` (`REQUIRE_MODELS_PRESENT=1`)
 - `5`: whisper execution failed (some files failed)
